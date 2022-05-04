@@ -1,0 +1,242 @@
+---
+title: "Testing with a balanced dataset"
+author: "sumit nayek"
+date: "`r Sys.Date()`"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+---
+```{r}
+
+## data description
+# Age : Age of the patient
+#
+# Sex : Sex of the patient
+#
+# exang: exercise induced angina (1 = yes; 0 = no)
+#
+# ca: number of major vessels (0-3)
+#
+# cp : Chest Pain type chest pain type
+#
+# Value 1: typical angina
+# Value 2: atypical angina
+# Value 3: non-anginal pain
+# Value 4: asymptomatic
+# trtbps : resting blood pressure (in mm Hg)
+#
+# chol : cholestoral in mg/dl fetched via BMI sensor
+#
+# fbs : (fasting blood sugar > 120 mg/dl) (1 = true; 0 = false)
+#
+# rest_ecg : resting electrocardiographic results
+#
+# Value 0: normal
+# Value 1: having ST-T wave abnormality (T wave inversions and/or ST elevation or depression of > 0.05 mV)
+# Value 2: showing probable or definite left ventricular hypertrophy by Estes' criteria
+# thalach : maximum heart rate achieved
+#
+# target : 0= less chance of heart attack 1= more chance of heart attack
+## data preparation
+data=read.csv(file="C:\\Users\\Sumit Nayek\\Downloads\\heart.csv")
+str(data) ## Checking the variables and their corossponding types
+library(dplyr)
+## Checking for na values in the data
+data %>%
+  summarize_all(~(sum(is.na(.))))
+## Checking for the missing values in the data
+colSums(is.na(data))
+## Checking for empty values
+colSums(data=='')
+## Checking if the data set is balanced or not
+t=table(data$output)
+1-t[2]/sum(t)
+names(data) ## variables names of the dataset
+
+## There are several factor variable but incoded as numeric .we have to change  it first
+names(data[,-c(1,4,5,8,10)])
+names(data)
+data[,-c(1,4,5,8,10)]=data.frame(lapply(data[,-c(1,4,5,8,10)], function(x) as.factor(as.numeric(x))))
+str(data[,-c(1,4,5,8,10)])
+## Checking distributioin of each categorical variable
+par(mfrow = c(2, 4)) ## We partition the space into 4*4 because the number of varible is 8
+k=data[,-c(1,4,5,8,10,14)]
+for(i in names(k)){
+k=table(data[,i])
+hist(k, main = i, xlab = "Value")
+}
+par(mfrow = c(2,3)) ## We partition the space into 4*4 because the number of varible is 8
+k=data[,c(1,4,5,8,10)]
+names(k)
+for(i in names(k))
+  hist(k[[i]], main = i, xlab = "Value")
+## Checking distributioin of each variable
+par(mfrow = c(1,1))
+plot(data$age,data$cp)
+plot(data$age,data$thalachh) ## from this result we can conclude that aws age increae # thalach : maximum heart rate achieved is going to decrease.
+### Correlation between numeric variables
+h1=data[,c(1,4,5,8,10)]
+cor(h1)
+pairs(h1)
+library(corrplot)
+corrplot(cor(h1))
+## calculating gini index for comparing miss classificatoin measure and gini index for categorical data
+h1=data[,-c(1,4,5,8,10)]
+col_name=colnames(h1[,-9])
+n=ncol(h1)
+gini_score=list()
+for(j in 1:(n-1)){
+  p=table(h1[,j][h1[,9]==1])
+  t=table(h1[,j])
+  ## proportion of student got placed from states(placement rate)
+  v=list()
+  for(i in 1:length(t)){
+    v[[i]]=p[[i]]/t[[i]]
+  }
+  ### calculating the gini for the labels of the categorical variable
+  gini=list()
+  weigted_gini_score=0
+  for(i in 1:length(v)){
+    gini[[i]]=v[[i]]**2+(1-v[[i]])**2
+    weigted_gini_score=weigted_gini_score+t[i]/nrow(data)*gini[[i]]
+  }
+  gini_score[[j]]=weigted_gini_score
+  names(gini_score[[j]])=col_name[j]
+}
+gini_score
+#### misclassification measure
+h1=data[,-c(1,4,5,8,10)]
+
+Miss_classification_rate=list()
+col_names=colnames(h1[,-9])
+h1$new_class=h1[,9]
+n=length(h1)
+n
+for(j in 1:(n-2)){
+  p=table(h1[,j][h1[,9]==1]) ## For branch index is 2
+  t=table(h1[,j])
+  ## proportion of student got placed from states(placement rate)
+  v=list()
+  for(i in 1:length(t)){
+    v[[i]]=p[i]/t[i]
+  }
+  ## Tagging the labels with placement and non placement class
+  for (i in 1:length(v)){
+    if(v[[i]]>=0.5){
+      h1[,10][h1[,j]==names(v[[i]])]=1
+    }else{
+      h1[,10][h1[,j]==names(v[[i]])]=0
+    }
+  }
+  ## Calculating proportion of misclassification
+  l=table(h1[,10],h1[,9])
+  Miss_classification_rate[[j]]=(l[1,2]+l[2,1])/nrow(h1)
+  names(Miss_classification_rate[[j]])=col_names[j]
+}
+Miss_classification_rate
+
+
+## From the plot we can clearly see that some of the variable have negative relation and some has minor positive relations
+## From this we can say that these variable can increase the errors in estimating the target variable values
+## Another type of correlation plot
+panel.cor <- function(x, y, digits=2, prefix="", cex.cor, ...) {
+  usr <- par("usr")
+  on.exit(par(usr))
+  par(usr = c(0, 1, 0, 1))
+  r <- abs(cor(x, y, use="complete.obs"))
+  txt <- format(c(r, 0.123456789), digits=digits)[1]
+  txt <- paste(prefix, txt, sep="")
+  if(missing(cex.cor)) cex.cor <- 0.8/strwidth(txt)
+  text(0.5, 0.5, txt, cex = cex.cor * (1 + r) / 2)
+}
+pairs(h1,
+      upper.panel = panel.cor) ## Relational plot and there corelation
+#### Applying the missclassification on the numeric variable(0-25% first group)
+h1=data[,c(1,4,5,8,10,14)]
+str(h1)
+Miss_classification_rate=list()
+col_names=colnames(h1[,-6])
+h1$new_class=h1[,6]
+col_names
+n=length(h1)
+group=list()
+table(h1$new_class)
+for(j in 1:(n-2)){
+  k=c()
+  # j=5
+  k=quantile(h1[,j])
+  First_group=h1[,j][h1[,j]<=k[2]] ## Under 25%
+  Second_group=h1[,j][h1[,j]>k[2]&h1[,j]<=k[4]] ## Between 25 % to 75%
+  Third_group=h1[,j][h1[,j]>k[4]&h1[,j]<=k[5]] ## 75% to remaning
+  group[[1]]=First_group
+  group[[2]]=Second_group
+  group[[3]]=Third_group
+  ## proportion of student got placed from all(attack rate)
+  attack_rate=c()
+  for (i in 1:3){
+    b_1=h1[,6][(h1[,j]%in%group[[i]])&(h1[,6]==1)]
+    attack_rate[i]=length(b_1)/length(h1[,j]%in%group[[i]])
+  }
+  # attack_rate
+  ## Tagging the labels with placement and non placement class
+  for (i in 1:3){
+    if(attack_rate[i]>=0.25){
+      h1[,7][h1[,j]%in%group[[i]]]=1
+    }else{
+      h1[,7][h1[,j]%in%group[[i]]]=0
+    }
+  }
+  ## Calculating proportion of misclassification
+  l=table(h1[,7],h1[,6])
+  l
+  Miss_classification_rate[[j]]=(l[1,2]+l[2,1])/nrow(h1)
+  names(Miss_classification_rate[[j]])=col_names[j]
+}
+Miss_classification_rate
+#### Applying the missclassification on the numeric variable(0-50% first group)
+h1=data[,c(1,4,5,8,10,14)]
+str(h1)
+Miss_classification_rate=list()
+col_names=colnames(h1[,-6])
+h1$new_class=h1[,6]
+col_names
+n=length(h1)
+group=list()
+table(h1$new_class)
+for(j in 1:(n-2)){
+  k=c()
+  # j=5
+  k=quantile(h1[,j])
+  First_group=h1[,j][h1[,j]<=k[3]] ## Under 50%
+  Second_group=h1[,j][h1[,j]>k[3]&h1[,j]<=k[4]] ## Between 50 % to 75%
+  Third_group=h1[,j][h1[,j]>k[4]&h1[,j]<=k[5]] ## 75% to remaning
+  group[[1]]=First_group
+  group[[2]]=Second_group
+  group[[3]]=Third_group
+  ## proportion of student got placed from all(attack rate)
+  attack_rate=c()
+  for (i in 1:3){
+    b_1=h1[,6][(h1[,j]%in%group[[i]])&(h1[,6]==1)]
+    attack_rate[i]=length(b_1)/length(h1[,j]%in%group[[i]])
+  }
+  # attack_rate
+  ## Tagging the labels with placement and non placement class
+  for (i in 1:3){
+    if(attack_rate[i]>=0.25){
+      h1[,7][h1[,j]%in%group[[i]]]=1
+    }else{
+      h1[,7][h1[,j]%in%group[[i]]]=0
+    }
+  }
+  ## Calculating proportion of misclassification
+  l=table(h1[,7],h1[,6])
+  l
+  Miss_classification_rate[[j]]=(l[1,2]+l[2,1])/nrow(h1)
+  names(Miss_classification_rate[[j]])=col_names[j]
+}
+Miss_classification_rate
+## The last one 0-50% in first group with thresoold .25 classify better than the 0-25 first group with respect to age and old peak variable remaning all are same. 
+
+```
+
